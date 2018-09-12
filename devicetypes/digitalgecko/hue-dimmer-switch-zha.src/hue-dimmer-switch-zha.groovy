@@ -14,278 +14,307 @@
  *
  */
 metadata {
-	definition (name: "Hue Dimmer Switch (ZHA)", namespace: "digitalgecko", author: "Stephen McLaughlin") {
-		capability "Configuration"
-		capability "Battery"
-		capability "Refresh"
+    definition (name: "Hue Dimmer Switch (ZHA)", namespace: "digitalgecko", author: "Stephen McLaughlin") {
+        capability "Configuration"
+        capability "Battery"
+        capability "Refresh"
         capability "Button"
-		capability "Sensor"
-        
+        capability "Sensor"
+
         fingerprint profileId: "0104", endpointId: "02", application:"02", outClusters: "0019", inClusters: "0000,0001,0003,000F,FC00", manufacturer: "Philips", model: "RWL020", deviceJoinName: "Hue Dimmer Switch (ZHA)"
 
-		attribute "lastAction", "string"
-	}
+        attribute "lastAction", "string"
+    }
 
 
-	simulator {
-		// TODO: define status and reply messages here
-	}
+    simulator {
+        // TODO: define status and reply messages here
+    }
 
     tiles(scale: 2) {
-		// TODO: define your main and details tiles here
+        // TODO: define your main and details tiles here
         multiAttributeTile(name:"lastAction", type: "generic", width: 6, height: 4){
             tileAttribute ("device.battery", key: "SECONDARY_CONTROL") {
-				attributeState "battery", label:'${currentValue}% battery',icon:"st.Outdoor.outdoor3", unit:"", backgroundColors:[
-					[value: 30, color: "#ff0000"],
-                    [value: 40, color: "#760000"],
-					[value: 60, color: "#ff9900"],
-					[value: 80, color: "#007600"]
-				]
-			}
+                attributeState "battery", label:'${currentValue}% battery',icon:"st.Outdoor.outdoor3", unit:"", backgroundColors:[
+                [value: 30, color: "#ff0000"],
+                [value: 40, color: "#760000"],
+                [value: 60, color: "#ff9900"],
+                [value: 80, color: "#007600"]
+                ]
+            }
             tileAttribute ("device.lastAction", key: "PRIMARY_CONTROL") {
-				attributeState "active", label:'${currentValue}', icon:"st.Home.home30"
-			}
+                attributeState "active", label:'${currentValue}', icon:"st.Home.home30"
+            }
 
-		}
-//        valueTile("lastAction", "device.lastAction", width: 6, height: 2) {
-//			state("lastAction", label:'${currentValue}')
-//		}
+        }
+        //        valueTile("lastAction", "device.lastAction", width: 6, height: 2) {
+        //			state("lastAction", label:'${currentValue}')
+        //		}
 
         valueTile("battery2", "device.battery", decoration: "flat", inactiveLabel: false, width: 5, height: 1) {
-			state("battery", label:'${currentValue}% battery', unit:"")
-		}
+            state("battery", label:'${currentValue}% battery', unit:"")
+        }
         standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 1, height: 1) {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
         }
-//        standardTile("configure", "device.configure", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
-//            state "default", label:"bind", action:"configure"
-//        }
+        //        standardTile("configure", "device.configure", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+        //            state "default", label:"bind", action:"configure"
+        //        }
 
-	}
-    
-            main "lastAction"
-        details(["lastAction","battery2","refresh","configure"])
+    }
+
+    main "lastAction"
+    details(["lastAction","battery2","refresh","configure"])
 
 }
 
 // parse events into attributes
 def parse(String description) {
-        def msg = zigbee.parse(description)
-   
+    def msg = zigbee.parse(description)
+
     //log.warn msg
     /// Actual code down here
-    Map map = [:]
+    List map = []
     if (description?.startsWith('catchall:')) {
-		map = parseCatchAllMessage(description)
-	}
-    
-    
-    
-    def result = map ? createEvent(map) : null
-	
+        map = parseCatchAllMessage(description)
+    }
+
+
+
+    def result = map ? map : null
+
     if (description?.startsWith('enroll request')) {
-		List cmds = enrollResponse()
-		result = cmds?.collect { new physicalgraph.device.HubAction(it) }
-	}
-	else if (description?.startsWith('read attr -')) {
-		result = parseReportAttributeMessage(description).each { createEvent(it) }
-	}
-    
+        List cmds = enrollResponse()
+        result = cmds?.collect { new physicalgraph.device.HubAction(it) }
+    }
+    else if (description?.startsWith('read attr -')) {
+        result = parseReportAttributeMessage(description).each { createEvent(it) }
+    }
+
     return result
 
-	// TODO: handle 'numberOfButtons' attribute
+    // TODO: handle 'numberOfButtons' attribute
 
 }
 /*
-	parseReportAttributeMessage
-*/
+parseReportAttributeMessage
+ */
 private List parseReportAttributeMessage(String description) {
-	Map descMap = (description - "read attr - ").split(",").inject([:]) { map, param ->
-		def nameAndValue = param.split(":")
-		map += [(nameAndValue[0].trim()):nameAndValue[1].trim()]
-	}
+    Map descMap = (description - "read attr - ").split(",").inject([:]) { map, param ->
+        def nameAndValue = param.split(":")
+        map += [(nameAndValue[0].trim()):nameAndValue[1].trim()]
+    }
 
-	List result = []
-    
+    List result = []
+
     // Battery
-	if (descMap.cluster == "0001" && descMap.attrId == "0020") {
-   // log.warn descMap
-		result << getBatteryResult(Integer.parseInt(descMap.value, 16))
-	}
-    
-	return result
+    if (descMap.cluster == "0001" && descMap.attrId == "0020") {
+        // log.warn descMap
+        result << getBatteryResult(Integer.parseInt(descMap.value, 16))
+    }
+
+    return result
 }
 
 private boolean shouldProcessMessage(cluster) {
-	// 0x0B is default response indicating message got through
-	boolean ignoredMessage = cluster.profileId != 0x0104 ||
-	cluster.command == 0x0B ||
-	(cluster.data.size() > 0 && cluster.data.first() == 0x3e)
-	return !ignoredMessage
+    // 0x0B is default response indicating message got through
+    boolean ignoredMessage = cluster.profileId != 0x0104 ||
+    cluster.command == 0x0B ||
+    (cluster.data.size() > 0 && cluster.data.first() == 0x3e)
+    return !ignoredMessage
 }
 
 /*
-	getBatteryResult
-*/
+getBatteryResult
+ */
 //TODO: needs calibration
 private Map getBatteryResult(rawValue) {
-	//log.debug "Battery rawValue = ${rawValue}"
+    //log.debug "Battery rawValue = ${rawValue}"
 
-	def result = [
-		name: 'battery',
-		value: '--',
-		translatable: true
-	]
+    def result = [
+    name: 'battery',
+    value: '--',
+    translatable: true
+    ]
 
-	def volts = rawValue / 10
+    def volts = rawValue / 10
 
-	if (rawValue == 0 || rawValue == 255) {}
-	else {
-		if (volts > 3.5) {
-			result.descriptionText = "{{ device.displayName }} battery has too much power: (> 3.5) volts."
-		}
-		else {
-			if (device.getDataValue("manufacturer") == "SmartThings") {
-				volts = rawValue // For the batteryMap to work the key needs to be an int
-				def batteryMap = [28:100, 27:100, 26:100, 25:90, 24:90, 23:70,
-								  22:70, 21:50, 20:50, 19:30, 18:30, 17:15, 16:1, 15:0]
-				def minVolts = 15
-				def maxVolts = 28
+    if (rawValue == 0 || rawValue == 255) {}
+    else {
+        if (volts > 3.5) {
+            result.descriptionText = "{{ device.displayName }} battery has too much power: (> 3.5) volts."
+        }
+        else {
+            if (device.getDataValue("manufacturer") == "SmartThings") {
+                volts = rawValue // For the batteryMap to work the key needs to be an int
+                def batteryMap = [28:100, 27:100, 26:100, 25:90, 24:90, 23:70,
+                22:70, 21:50, 20:50, 19:30, 18:30, 17:15, 16:1, 15:0]
+                def minVolts = 15
+                def maxVolts = 28
 
-				if (volts < minVolts)
-					volts = minVolts
-				else if (volts > maxVolts)
-					volts = maxVolts
-				def pct = batteryMap[volts]
-				if (pct != null) {
-					result.value = pct
-					result.descriptionText = "{{ device.displayName }} battery was {{ value }}%"
-				}
-			}
-			else {
-				def minVolts = 2.1
-				def maxVolts = 3.0
-				def pct = (volts - minVolts) / (maxVolts - minVolts)
-				def roundedPct = Math.round(pct * 100)
-				if (roundedPct <= 0)
-					roundedPct = 1
-				result.value = Math.min(100, roundedPct)
-				result.descriptionText = "{{ device.displayName }} battery was {{ value }}%"
-			}
-		}
-	}
+                if (volts < minVolts)
+                    volts = minVolts
+                else if (volts > maxVolts)
+                    volts = maxVolts
+                    def pct = batteryMap[volts]
+                    if (pct != null) {
+                        result.value = pct
+                        result.descriptionText = "{{ device.displayName }} battery was {{ value }}%"
+                    }
+            }
+            else {
+                def minVolts = 2.1
+                def maxVolts = 3.0
+                def pct = (volts - minVolts) / (maxVolts - minVolts)
+                def roundedPct = Math.round(pct * 100)
+                if (roundedPct <= 0)
+                    roundedPct = 1
+                    result.value = Math.min(100, roundedPct)
+                    result.descriptionText = "{{ device.displayName }} battery was {{ value }}%"
+            }
+        }
+    }
 
-	return result
+    return result
 }
 
-private Map getButtonResult(rawValue) {
+private List getButtonResult(rawValue) {
+    def result
+    def button = rawValue[0]
+    def buttonState = rawValue[4]
+    def buttonHoldTime = rawValue[6]
+    def hueStatus = (button as String) + "00" + (buttonState as String) // This is the state in the HUE api
+    log.error "Button: " + button + "  Hue Code: " + hueStatus + "  Hold Time: " + buttonHoldTime + "  Button State: " + buttonState
+    //   result.data = ['buttonNumber': button]
 
-	def result = [
-		name: 'button',
-		value: '--',
-		translatable: true
-	]
-                    def button = rawValue[0]
-                    def buttonState = rawValue[4]
-                    def buttonHoldTime = rawValue[6]
-                    def hueStatus = (button as String) + "00" + (buttonState as String) // This is the state in the HUE api
-                    log.error "Button: " + button + "  Hue Code: " + hueStatus + "  Hold Time: " + buttonHoldTime
-                    result.data = ['buttonNumber': button]
-                    result.value = 'pushed'
-                    
-                    if ( buttonState == 2 ) {
-                     result = createEvent(name: "button", value: "pushed", data: [buttonNumber: button], descriptionText: "$device.displayName button $button was pushed", isStateChange: true)
-                                         sendEvent(name: "lastAction", value: button + " pushed")
+    def buttonName
 
-					}
-                    
-                    if ( buttonState == 3 ) {
-                     result = createEvent(name: "button", value: "held", data: [buttonNumber: button], descriptionText: "$device.displayName button $button was held", isStateChange: true)
-                                         sendEvent(name: "lastAction", value: button + " held")
-					}
-return result
-                    
+	// Name of the button
+    if ( button == 1 ) { 
+        buttonName = "on"
+    }
+    else if ( button == 2 ) { 
+        buttonName = "up" 
+    }
+    else if ( button == 3 ) {
+        buttonName = "down" 
+    }
+    else if ( button == 4 ) { 
+        buttonName = "off" 
+    }
+
+	// The button is pressed, aka: pushed + released, with 0 hold time
+    if ( buttonState == 0 ) {
+        result = [createEvent(name: "button", value: "pressed_" + buttonName, data: [buttonNumber: buttonName], descriptionText: "$device.displayName button $button was pushed", isStateChange: true)]
+        sendEvent(name: "lastAction", value: buttonName + " pressed")
+    } 
+	// The button is pressed, aka: pushed + released, with at least 1s hold time
+    else if ( buttonState == 2 ) {
+        result = [
+        createEvent(name: "button", value: "pushed_" + buttonName, data: [buttonNumber: buttonName], descriptionText: "$device.displayName button $button was pushed", isStateChange: true),
+        createEvent(name: "button", value: "released_" + buttonName, data: [buttonNumber: buttonName], descriptionText: "$device.displayName button $button was pushed", isStateChange: true)
+        ]
+        sendEvent(name: "lastAction", value: buttonName + " pushed")
+        sendEvent(name: "lastAction", value: buttonName + " released")
+    } 
+	// The button is released, with at least 1s hold time. This code happens after the button is held
+    else if ( buttonState == 3 ) {
+        result = [
+        createEvent(name: "button", value: "released_" + buttonName, data: [buttonNumber: buttonName], descriptionText: "$device.displayName button $button was pushed", isStateChange: true)
+        ]
+        sendEvent(name: "lastAction", value: buttonName + " released")
+    } 
+	// The button is held
+    else if ( buttonHoldTime == 8 ) {
+        result = [createEvent(name: "button", value: "held_" + buttonName, data: [buttonNumber: buttonName], descriptionText: "$device.displayName button $button was held", isStateChange: true)]
+        sendEvent(name: "lastAction", value: buttonName + " held")
+    } 
+    else {
+        return
+    }
+    return result
+
 }
 
 /*
-	parseCatchAllMessage
-*/
-private Map parseCatchAllMessage(String description) {
-	Map resultMap = [:]
-	def cluster = zigbee.parse(description)
-	if (shouldProcessMessage(cluster)) {
-		switch(cluster.clusterId) {
-			case 0x0001:
-				// 0x07 - configure reporting
-				if (cluster.command != 0x07) {
-					resultMap = getBatteryResult(cluster.data.last())
-				}
-			break
+parseCatchAllMessage
+ */
+private List parseCatchAllMessage(String description) {
+    List resultMap = []
+    def cluster = zigbee.parse(description)
+    if (shouldProcessMessage(cluster)) {
+        switch(cluster.clusterId) {
+            case 0x0001:
+            // 0x07 - configure reporting
+            if (cluster.command != 0x07) {
+                resultMap = [getBatteryResult(cluster.data.last())]
+            }
+            break
 
-			case 0xFC00:
-            	if ( cluster.command == 0x00 ) {
-					resultMap = getButtonResult( cluster.data );
-                }
-             break
+            case 0xFC00:
+            if ( cluster.command == 0x00 ) {
+                resultMap = getButtonResult( cluster.data );
+            }
+            break
 
-		}
-	}
+        }
+    }
 
-	return resultMap
+    return resultMap
 }
 
 
 def refresh() {
     //log.debug "Refresh"
-    
+
     def refreshCmds = []
-    
+
     refreshCmds += "st rattr 0x${device.deviceNetworkId} 0x02 0x0001 0x0020"; // WORKS! - Fetches battery from 0x02
 
 
-//   configCmds += zigbee.configureReporting(0x406,0x0000, 0x18, 30, 600, null) // motion // confirmed
+    //   configCmds += zigbee.configureReporting(0x406,0x0000, 0x18, 30, 600, null) // motion // confirmed
 
-//refreshCmds += zigbee.configureReporting(0x000F, 0x0055, 0x10, 30, 30, null);
-//	refreshCmds += "zdo bind 0xDAD6 0x01 0x02 0x000F {00178801103317AA} {}"
-//    refreshCmds += "delay 2000"
-//    refreshCmds += "st cr 0xDAD6 0x02 0x000F 0x0055 0x10 0x001E 0x001E {}"
-//    refreshCmds += "delay 2000"
-    
-//refreshCmds += zigbee.configureReporting(0x000F, 0x006F, 0x18, 0x30, 0x30);
-//	refreshCmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x02 0xFC00 {${device.zigbeeId}} {}"
- //   refreshCmds += "delay 2000"
-  //  refreshCmds += "st cr 0x${device.deviceNetworkId} 0x02 0xFC00 0x0000 0x18 0x001E 0x001E {}"
-  //  refreshCmds += "delay 2000"
-//log.debug refreshCmds
+    //refreshCmds += zigbee.configureReporting(0x000F, 0x0055, 0x10, 30, 30, null);
+    //	refreshCmds += "zdo bind 0xDAD6 0x01 0x02 0x000F {00178801103317AA} {}"
+    //    refreshCmds += "delay 2000"
+    //    refreshCmds += "st cr 0xDAD6 0x02 0x000F 0x0055 0x10 0x001E 0x001E {}"
+    //    refreshCmds += "delay 2000"
+
+    //refreshCmds += zigbee.configureReporting(0x000F, 0x006F, 0x18, 0x30, 0x30);
+    //	refreshCmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x02 0xFC00 {${device.zigbeeId}} {}"
+    //   refreshCmds += "delay 2000"
+    //  refreshCmds += "st cr 0x${device.deviceNetworkId} 0x02 0xFC00 0x0000 0x18 0x001E 0x001E {}"
+    //  refreshCmds += "delay 2000"
+    //log.debug refreshCmds
 
     return refreshCmds
 }
 
 def configure() {
-//	String zigbeeId = swapEndianHex(device.hub.zigbeeId)
-	//log.debug "Configiring Reporting and Bindings."
+    //	String zigbeeId = swapEndianHex(device.hub.zigbeeId)
+    //log.debug "Configiring Reporting and Bindings."
     def configCmds = []
-    
-    // Configure Button Count
-sendEvent(name: "numberOfButtons", value: 4, displayed: false)
 
-// Monitor Buttons
-//TODO: This could be zigbee.configureReporting(0xFC00, 0x0000, 0x18, 0x001e, 0x001e); but no idea how to point it at a different endpoint
-	configCmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x02 0xFC00 {${device.zigbeeId}} {}"
+    // Configure Button Count
+    sendEvent(name: "numberOfButtons", value: 4, displayed: false)
+
+    // Monitor Buttons
+    //TODO: This could be zigbee.configureReporting(0xFC00, 0x0000, 0x18, 0x001e, 0x001e); but no idea how to point it at a different endpoint
+    configCmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x02 0xFC00 {${device.zigbeeId}} {}"
     configCmds += "delay 2000"
     configCmds += "st cr 0x${device.deviceNetworkId} 0x02 0xFC00 0x0000 0x18 0x001E 0x001E {}"
     configCmds += "delay 2000"
 
-// Monitor Battery
-//TODO: This could be zigbee.batteryConfig(); but no idea how to point it at a different endpoint
-	configCmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x02 0x0001 {${device.zigbeeId}} {}"
+    // Monitor Battery
+    //TODO: This could be zigbee.batteryConfig(); but no idea how to point it at a different endpoint
+    configCmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x02 0x0001 {${device.zigbeeId}} {}"
     configCmds += "delay 2000"
     configCmds += "st cr 0x${device.deviceNetworkId} 0x02 0x0001 0x0020 0x20 0x001E 0x0258 {}"
-   //    configCmds += "st cr 0x${device.deviceNetworkId} 0x02 0x0001 0x0020 0x20 0x001E 0x001e {}"
+    //    configCmds += "st cr 0x${device.deviceNetworkId} 0x02 0x0001 0x0020 0x20 0x001E 0x001e {}"
 
     configCmds += "delay 2000"
 
-return configCmds + refresh()
+    return configCmds + refresh()
 
 
 }
@@ -297,7 +326,7 @@ def configureHealthCheck() {
 }
 
 def updated() {
-   // log.debug "in updated()"
-    
+    // log.debug "in updated()"
+
     configureHealthCheck()
-    }
+}
